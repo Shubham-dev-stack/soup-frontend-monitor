@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import uPlot from 'uplot';
 import { RotateCcw, AlertTriangle, Eye, ShieldAlert } from 'lucide-react';
 import { downsampleMinMax, downsampleNaiveStride } from '../lib/downsample';
@@ -9,6 +9,8 @@ interface ChartProps {
   values: (number | null)[];
   seriesName: string;
   color?: string;
+  gradientFrom?: string;
+  gradientTo?: string;
   isLogScaleAllowed?: boolean;
   unit?: string;
   showDownsampleToggle?: boolean;
@@ -19,253 +21,223 @@ export const Chart: React.FC<ChartProps> = ({
   steps,
   values,
   seriesName,
-  color = '#38bdf8',
+  color = '#3b82f6',
+  gradientFrom,
+  gradientTo,
   isLogScaleAllowed = false,
   unit = '',
   showDownsampleToggle = false,
 }) => {
   const chartRef = useRef<HTMLDivElement>(null);
-  const uplotInstanceRef = useRef<uPlot | null>(null);
+  const uplotRef = useRef<uPlot | null>(null);
 
   const [isLogScale, setIsLogScale] = useState(false);
-  const [downsampleMode, setDownsampleMode] = useState<'minmax' | 'stride' | 'raw'>('minmax');
-  const [clampedCount, setClampedCount] = useState<number>(0);
+  const [downsampleMode, setDownsampleMode] = useState<'minmax' | 'stride'>('minmax');
+  const [clampedCount, setClampedCount] = useState(0);
 
-  // Prepare data with selected downsampling & scale
-  const preparedData = React.useMemo(() => {
-    let activeSteps = steps;
-    let activeValues = values;
+  const preparedData = useMemo(() => {
+    let ds = steps;
+    let dv = values;
 
     if (showDownsampleToggle && steps.length > 3000) {
       if (downsampleMode === 'minmax') {
-        const ds = downsampleMinMax(steps, values, 2000);
-        activeSteps = ds.steps;
-        activeValues = ds.values;
-      } else if (downsampleMode === 'stride') {
-        const ds = downsampleNaiveStride(steps, values, 2000);
-        activeSteps = ds.steps;
-        activeValues = ds.values;
-      }
-    }
-
-    let nonPositive = 0;
-    const transformedValues: (number | null)[] = [];
-
-    for (let i = 0; i < activeValues.length; i++) {
-      const v = activeValues[i];
-      if (v === null) {
-        transformedValues.push(null);
-        continue;
-      }
-
-      if (isLogScale) {
-        if (v <= 0) {
-          nonPositive++;
-          transformedValues.push(1e-6); // Clamp to positive floor
-        } else {
-          transformedValues.push(v);
-        }
+        const r = downsampleMinMax(steps, values, 2000);
+        ds = r.steps;
+        dv = r.values;
       } else {
-        transformedValues.push(v);
+        const r = downsampleNaiveStride(steps, values, 2000);
+        ds = r.steps;
+        dv = r.values;
       }
     }
 
-    setClampedCount(nonPositive);
-    return [activeSteps, transformedValues] as [number[], (number | null)[]];
+    let np = 0;
+    const tv: (number | null)[] = [];
+    for (const v of dv) {
+      if (v === null) { tv.push(null); continue; }
+      if (isLogScale && v <= 0) { np++; tv.push(1e-6); }
+      else { tv.push(v); }
+    }
+    setClampedCount(np);
+    return [ds, tv] as [number[], (number | null)[]];
   }, [steps, values, downsampleMode, isLogScale, showDownsampleToggle]);
 
   useEffect(() => {
     if (!chartRef.current) return;
+    if (uplotRef.current) { uplotRef.current.destroy(); uplotRef.current = null; }
 
-    // Destroy existing plot if any
-    if (uplotInstanceRef.current) {
-      uplotInstanceRef.current.destroy();
-      uplotInstanceRef.current = null;
-    }
-
-    const width = chartRef.current.clientWidth || 700;
-    const height = 260;
+    const width = chartRef.current.clientWidth || 600;
+    const height = 240;
+    const lineColor = color;
 
     const opts: uPlot.Options = {
       width,
       height,
+      padding: [12, 12, 0, 0],
       cursor: {
         drag: { x: true, y: true },
-        sync: { key: 'soup-charts' },
-        points: {
-          size: 6,
-          fill: color,
-        },
+        sync: { key: 'soup-sync' },
+        points: { size: 8, fill: lineColor, stroke: '#fff', width: 2 },
       },
       scales: {
-        x: {
-          time: false,
-        },
-        y: {
-          distr: isLogScale ? 3 : 1, // 3 is log scale in uPlot
-        },
+        x: { time: false },
+        y: { distr: isLogScale ? 3 : 1 },
       },
       axes: [
         {
-          stroke: '#64748b',
-          grid: { stroke: 'rgba(51, 65, 85, 0.3)', width: 1 },
-          ticks: { stroke: '#475569', width: 1 },
-          values: (_u, vals) => vals.map((v) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`),
+          stroke: 'rgba(107, 123, 165, 0.4)',
+          grid: { stroke: 'rgba(107, 123, 165, 0.06)', width: 1 },
+          ticks: { stroke: 'rgba(107, 123, 165, 0.15)', width: 1, size: 4 },
+          font: '10px Inter, system-ui, sans-serif',
+          values: (_u, vals) =>
+            vals.map((v) => (v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)),
         },
         {
-          stroke: '#64748b',
-          grid: { stroke: 'rgba(51, 65, 85, 0.3)', width: 1 },
-          ticks: { stroke: '#475569', width: 1 },
-          values: (_u, vals) => vals.map((v) => {
-            if (v === null) return '';
-            if (v >= 1000) return `${(v / 1000).toFixed(1)}k`;
-            if (v < 0.01 && v > 0) return v.toExponential(1);
-            return v.toFixed(v < 1 ? 3 : 2);
-          }),
+          stroke: 'rgba(107, 123, 165, 0.4)',
+          grid: { stroke: 'rgba(107, 123, 165, 0.06)', width: 1 },
+          ticks: { stroke: 'rgba(107, 123, 165, 0.15)', width: 1, size: 4 },
+          font: '10px Inter, system-ui, sans-serif',
+          size: 52,
+          values: (_u, vals) =>
+            vals.map((v) => {
+              if (v == null) return '';
+              if (Math.abs(v) >= 1000) return `${(v / 1000).toFixed(1)}k`;
+              if (Math.abs(v) < 0.001 && v !== 0) return v.toExponential(1);
+              return v < 1 ? v.toFixed(3) : v.toFixed(2);
+            }),
         },
       ],
       series: [
         {
           label: 'Step',
-          value: (_u, v) => (v === null ? '--' : `Step ${v.toLocaleString()}`),
+          value: (_u, v) => (v == null ? '--' : `Step ${v.toLocaleString()}`),
         },
         {
           label: seriesName,
-          stroke: color,
+          stroke: lineColor,
           width: 1.5,
-          spanGaps: false, // CRITICAL: NEVER interpolate across NaNs/nulls!
-          points: {
-            show: preparedData[0].length < 100, // Show individual points for small sets
-            size: 4,
+          spanGaps: false,
+          points: { show: preparedData[0].length < 80, size: 3 },
+          fill: (u: uPlot) => {
+            const ctx = u.ctx;
+            const from = gradientFrom || lineColor;
+            const to = gradientTo || 'transparent';
+            const top = u.bbox?.top;
+            const height = u.bbox?.height;
+            if (!Number.isFinite(top) || !Number.isFinite(height) || !height || height <= 0) {
+              return from + '18';
+            }
+            const grd = ctx.createLinearGradient(0, top, 0, top + height);
+            grd.addColorStop(0, from + '18');
+            grd.addColorStop(1, to === 'transparent' ? 'transparent' : to + '00');
+            return grd;
           },
-          value: (_u, v) => {
-            if (v === null) return 'NaN / Missing';
-            return `${v.toFixed(4)} ${unit}`;
-          },
+          value: (_u, v) => (v == null ? 'NaN / Missing' : `${v.toFixed(4)} ${unit}`),
         },
       ],
     };
 
-    const u = new uPlot(opts, preparedData as any, chartRef.current);
-    uplotInstanceRef.current = u;
+    const u = new uPlot(opts, preparedData as uPlot.AlignedData, chartRef.current);
+    uplotRef.current = u;
 
-    const handleResize = () => {
-      if (chartRef.current && uplotInstanceRef.current) {
-        uplotInstanceRef.current.setSize({
-          width: chartRef.current.clientWidth,
-          height: 260,
-        });
+    const ro = new ResizeObserver(() => {
+      if (chartRef.current && uplotRef.current) {
+        uplotRef.current.setSize({ width: chartRef.current.clientWidth, height: 240 });
       }
-    };
-
-    window.addEventListener('resize', handleResize);
+    });
+    ro.observe(chartRef.current);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
-      if (uplotInstanceRef.current) {
-        uplotInstanceRef.current.destroy();
-        uplotInstanceRef.current = null;
-      }
+      ro.disconnect();
+      if (uplotRef.current) { uplotRef.current.destroy(); uplotRef.current = null; }
     };
-  }, [preparedData, color, isLogScale, seriesName, unit]);
-
-  const handleResetZoom = () => {
-    if (uplotInstanceRef.current) {
-      uplotInstanceRef.current.setData(preparedData as any, true);
-    }
-  };
+  }, [preparedData, color, isLogScale, seriesName, unit, gradientFrom, gradientTo]);
 
   return (
-    <div className="bg-[#12141c] border border-[#1e2230] rounded-xl p-4 shadow-sm flex flex-col">
-      {/* Chart Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2 border-b border-[#1e2230]">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-          <h4 className="text-sm font-semibold text-gray-200 tracking-wide">{title}</h4>
-          <span className="text-xs text-gray-400 font-mono">({preparedData[0].length.toLocaleString()} points)</span>
+    <div className="glass-card p-0 overflow-hidden animate-fade-in">
+      {/* Toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-[var(--border-subtle)]">
+        <div className="flex items-center gap-2.5">
+          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}60` }} />
+          <h4 className="text-[12px] font-semibold text-[var(--text-primary)] tracking-tight">{title}</h4>
+          <span className="text-[10px] text-[var(--text-dim)] font-mono bg-[var(--bg-surface)] px-1.5 py-0.5 rounded-md">
+            {preparedData[0].length.toLocaleString()} pts
+          </span>
         </div>
 
-        <div className="flex items-center gap-2 text-xs">
-          {/* Downsample Mode Toggle (to prove truthfulness) */}
+        <div className="flex items-center gap-1.5 text-[10px]">
+          {/* Truthful vs Naive Toggle */}
           {showDownsampleToggle && steps.length > 3000 && (
-            <div className="flex items-center bg-[#1a1d28] border border-[#262b3d] rounded-lg p-0.5">
+            <div className="flex items-center bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-lg p-0.5">
               <button
                 type="button"
                 onClick={() => setDownsampleMode('minmax')}
-                className={`px-2 py-1 rounded font-medium transition-colors flex items-center gap-1 ${
+                className={`px-2 py-[3px] rounded-md font-semibold transition-all duration-200 flex items-center gap-1 cursor-pointer ${
                   downsampleMode === 'minmax'
-                    ? 'bg-emerald-600 text-white'
-                    : 'text-gray-400 hover:text-gray-200'
+                    ? 'bg-emerald-500/20 text-emerald-400 shadow-sm'
+                    : 'text-[var(--text-dim)] hover:text-[var(--text-muted)]'
                 }`}
-                title="Preserves both min and max in every pixel bucket. Outlier spikes are 100% visible."
               >
-                <Eye className="w-3 h-3" /> Min-Max (Truthful)
+                <Eye className="w-3 h-3" /> Truthful
               </button>
               <button
                 type="button"
                 onClick={() => setDownsampleMode('stride')}
-                className={`px-2 py-1 rounded font-medium transition-colors flex items-center gap-1 ${
+                className={`px-2 py-[3px] rounded-md font-semibold transition-all duration-200 flex items-center gap-1 cursor-pointer ${
                   downsampleMode === 'stride'
-                    ? 'bg-rose-600 text-white'
-                    : 'text-gray-400 hover:text-gray-200'
+                    ? 'bg-rose-500/20 text-rose-400 shadow-sm'
+                    : 'text-[var(--text-dim)] hover:text-[var(--text-muted)]'
                 }`}
-                title="Naive striding. Skips points and hides isolated outlier spikes!"
               >
-                <ShieldAlert className="w-3 h-3" /> Naive Stride (Lies)
+                <ShieldAlert className="w-3 h-3" /> Naive
               </button>
             </div>
           )}
 
-          {/* Log Scale Toggle */}
+          {/* Log Scale */}
           {isLogScaleAllowed && (
             <button
               type="button"
               onClick={() => setIsLogScale(!isLogScale)}
-              className={`px-2.5 py-1 rounded border transition-colors ${
+              className={`px-2 py-[3px] rounded-md font-semibold border transition-all duration-200 cursor-pointer ${
                 isLogScale
-                  ? 'bg-cyan-950 border-cyan-500 text-cyan-300 font-semibold'
-                  : 'bg-[#1a1d28] border-[#262b3d] text-gray-400 hover:text-gray-200'
+                  ? 'bg-cyan-500/15 border-cyan-500/25 text-cyan-400'
+                  : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-dim)] hover:text-[var(--text-muted)]'
               }`}
             >
-              {isLogScale ? 'Scale: Log' : 'Scale: Linear'}
+              {isLogScale ? 'Log' : 'Linear'}
             </button>
           )}
 
           {/* Reset Zoom */}
           <button
             type="button"
-            onClick={handleResetZoom}
-            className="p-1 rounded bg-[#1a1d28] border border-[#262b3d] text-gray-400 hover:text-gray-200"
-            title="Reset Zoom (or press 'R')"
+            onClick={() => uplotRef.current?.setData(preparedData as uPlot.AlignedData, true)}
+            className="p-[4px] rounded-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-dim)] hover:text-[var(--text-muted)] transition-colors cursor-pointer"
+            title="Reset zoom"
           >
-            <RotateCcw className="w-3.5 h-3.5" />
+            <RotateCcw className="w-3 h-3" />
           </button>
         </div>
       </div>
 
-      {/* Hazard Warning for Log Scale with <= 0 values */}
+      {/* Warning Banners */}
       {isLogScale && clampedCount > 0 && (
-        <div className="mb-2 px-3 py-1.5 rounded-lg bg-amber-950/60 border border-amber-600/50 text-amber-300 text-xs flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>
-            <strong>Silent Failure Guard:</strong> {clampedCount} non-positive value(s) clamped to 1e-6.
-            (log(0) is -Infinity; unclamped values cause silent render dropouts).
-          </span>
+        <div className="mx-4 mt-2 px-3 py-1.5 rounded-lg bg-amber-500/8 border border-amber-500/15 text-amber-400 text-[11px] flex items-center gap-2">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+          <span><strong>Log Scale Guard:</strong> {clampedCount} non-positive value{clampedCount > 1 && 's'} clamped to 1e-6 (log(0) = -∞).</span>
         </div>
       )}
 
-      {/* Downsampling Warning if in Naive mode on 1M run */}
-      {downsampleMode === 'stride' && steps.length > 500000 && (
-        <div className="mb-2 px-3 py-1.5 rounded-lg bg-rose-950/60 border border-rose-600/50 text-rose-300 text-xs flex items-center gap-2">
-          <ShieldAlert className="w-4 h-4 shrink-0" />
-          <span>
-            <strong>Warning:</strong> Naive Stride downsampling is active! Notice the catastrophic 942.5 spike at step 524,288 has vanished. Switch to <strong>Min-Max (Truthful)</strong> to reveal it.
-          </span>
+      {downsampleMode === 'stride' && steps.length > 50000 && (
+        <div className="mx-4 mt-2 px-3 py-1.5 rounded-lg bg-rose-500/8 border border-rose-500/15 text-rose-400 text-[11px] flex items-center gap-2">
+          <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+          <span><strong>Naive Stride active!</strong> The 942.5 spike at step 524,288 has vanished. Switch to <strong>Truthful</strong> to see it.</span>
         </div>
       )}
 
-      {/* Canvas Mount */}
-      <div ref={chartRef} className="w-full flex-1 min-h-[260px] cursor-crosshair" />
+      {/* Chart Canvas */}
+      <div ref={chartRef} className="w-full px-2 pb-2 pt-1 cursor-crosshair" />
     </div>
   );
 };

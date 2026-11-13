@@ -1,31 +1,178 @@
 @import "tailwindcss";
 @import "uplot/dist/uPlot.min.css";
 
+/* ═══════════════════════════════════════════════════
+   SOUP MONITOR — DESIGN SYSTEM TOKENS
+   Premium dark-mode training dashboard
+   ═══════════════════════════════════════════════════ */
+
 :root {
-  --bg-primary: #090a0f;
-  --bg-secondary: #12141c;
-  --border-color: #1e2230;
-  --text-primary: #f3f4f6;
-  --text-muted: #9ca3af;
+  /* Background Layers (deepest to surface) */
+  --bg-void: #06070d;
+  --bg-base: #0b0d17;
+  --bg-raised: #111525;
+  --bg-surface: #171c32;
+  --bg-hover: #1c2240;
+  --bg-glass: rgba(17, 21, 37, 0.72);
+
+  /* Borders */
+  --border-subtle: rgba(99, 118, 170, 0.12);
+  --border-default: rgba(99, 118, 170, 0.18);
+  --border-strong: rgba(99, 118, 170, 0.30);
+
+  /* Text */
+  --text-primary: #eef2ff;
+  --text-secondary: #a3aed0;
+  --text-muted: #6b7ba5;
+  --text-dim: #4a567a;
+
+  /* Accents */
+  --accent-primary: #3b82f6;
+  --accent-cyan: #06b6d4;
+  --accent-emerald: #10b981;
+  --accent-amber: #f59e0b;
+  --accent-rose: #f43f5e;
+  --accent-violet: #8b5cf6;
+
+  /* Glow */
+  --glow-blue: rgba(59, 130, 246, 0.15);
+  --glow-cyan: rgba(6, 182, 212, 0.12);
+  --glow-emerald: rgba(16, 185, 129, 0.12);
+  --glow-rose: rgba(244, 63, 94, 0.12);
+}
+
+/* ── Reset & Base ────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
   margin: 0;
-  background-color: var(--bg-primary);
+  padding: 0;
+  background-color: var(--bg-void);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   min-height: 100vh;
+  overflow: hidden;
 }
 
-/* uPlot custom dark theme overrides */
+/* ── Scrollbar ───────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(99, 118, 170, 0.2);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 118, 170, 0.35);
+}
+
+/* ── uPlot Dark Theme ────────────────────────── */
 .uplot {
-  font-family: inherit;
+  font-family: inherit !important;
 }
 .u-legend {
-  font-size: 12px;
-  color: #94a3b8;
+  display: none !important;
 }
-.u-cursor-x, .u-cursor-y {
-  border-color: rgba(148, 163, 184, 0.4) !important;
+.u-wrap {
+  border-radius: 8px;
+  overflow: hidden;
+}
+.u-cursor-x,
+.u-cursor-y {
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+.u-cursor-pt {
+  border-color: var(--accent-primary) !important;
+}
+
+/* ── Animations ──────────────────────────────── */
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes scale-up {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2.5s ease-in-out infinite;
+}
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.04), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+.animate-fade-in {
+  animation: fade-in 0.35s ease-out;
+}
+.animate-slide-in {
+  animation: slide-in-right 0.3s ease-out;
+}
+.animate-scale-up {
+  animation: scale-up 0.25s ease-out;
+}
+
+/* ── Glass Card ──────────────────────────────── */
+.glass-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.glass-card:hover {
+  border-color: var(--border-default);
+  box-shadow: 0 0 0 1px var(--border-subtle), 0 8px 32px -8px rgba(0,0,0,0.4);
+}
+
+/* ── Gradient Borders ────────────────────────── */
+.gradient-border-top {
+  position: relative;
+}
+.gradient-border-top::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-cyan), var(--accent-violet));
+  border-radius: 14px 14px 0 0;
+  opacity: 0.7;
+}
+
+/* ── Metric Value Glow ───────────────────────── */
+.metric-value {
+  text-shadow: 0 0 20px currentColor;
+}
+
+/* ── Selection ───────────────────────────────── */
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: white;
 }
