@@ -179,6 +179,16 @@ export function sanitizeMetrics(
   // Sort by step ascending
   const sorted = [...points].sort((a, b) => a.step - b.step);
 
+  // Calculate typical step delta to accurately distinguish telemetry dropouts from normal step stride
+  const deltas: number[] = [];
+  for (let i = 1; i < Math.min(sorted.length, 50); i++) {
+    const d = sorted[i].step - sorted[i - 1].step;
+    if (d > 0) deltas.push(d);
+  }
+  deltas.sort((a, b) => a - b);
+  const medianDelta = deltas.length > 0 ? deltas[Math.floor(deltas.length / 2)] : 1;
+  const gapThreshold = Math.max(15, medianDelta * 3);
+
   let duplicateCount = 0;
   let nanCount = 0;
   let infCount = 0;
@@ -200,8 +210,7 @@ export function sanitizeMetrics(
     // Check gap
     if (sanitized.length > 0) {
       const prevStep = sanitized[sanitized.length - 1].step;
-      // If step jump is significantly larger than typical interval (> 2x typical step delta)
-      if (p.step - prevStep > 5) {
+      if (p.step - prevStep > gapThreshold) {
         gapCount++;
       }
     }

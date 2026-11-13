@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Search, ChevronUp, ChevronDown } from 'lucide-react';
+import { Search, ArrowUpDown } from 'lucide-react';
 import type { TrainingRunSummary, RunStatus } from '../types';
 
 interface RunListProps {
@@ -8,11 +8,23 @@ interface RunListProps {
   onSelectRun: (id: string) => void;
 }
 
-const statusLabel: Record<RunStatus, { text: string; color: string }> = {
-  healthy: { text: 'healthy', color: 'text-[#00d294]' },
-  diverged: { text: 'diverged', color: 'text-[var(--amber)]' },
-  broken: { text: 'broken', color: 'text-[var(--rose)]' },
-  irregular: { text: 'irregular', color: 'text-[var(--muted)]' },
+const statusBadge: Record<RunStatus, { text: string; style: string }> = {
+  healthy: {
+    text: 'healthy',
+    style: 'border border-[#00d294]/30 bg-[#00d294]/10 text-[#00d294]',
+  },
+  diverged: {
+    text: 'diverged',
+    style: 'border border-[var(--amber)]/30 bg-[var(--amber)]/10 text-[var(--amber)]',
+  },
+  broken: {
+    text: 'broken',
+    style: 'border border-[var(--rose)]/30 bg-[var(--rose)]/10 text-[var(--rose)]',
+  },
+  irregular: {
+    text: 'irregular',
+    style: 'border border-[var(--border)] bg-[#161616] text-[var(--muted)]',
+  },
 };
 
 export const RunList: React.FC<RunListProps> = ({ runs, selectedRunId, onSelectRun }) => {
@@ -29,89 +41,117 @@ export const RunList: React.FC<RunListProps> = ({ runs, selectedRunId, onSelectR
         if (filter === 'issues') return r.status !== 'healthy';
         return true;
       })
-      .sort((a, b) => sortDesc ? b.totalSteps - a.totalSteps : a.totalSteps - b.totalSteps);
+      .sort((a, b) => (sortDesc ? b.totalSteps - a.totalSteps : a.totalSteps - b.totalSteps));
   }, [runs, search, filter, sortDesc]);
 
+  const counts = useMemo(() => {
+    return {
+      all: runs.length,
+      healthy: runs.filter((r) => r.status === 'healthy').length,
+      issues: runs.filter((r) => r.status !== 'healthy').length,
+    };
+  }, [runs]);
+
   return (
-    <aside className="w-full md:w-[280px] lg:w-[300px] flex flex-col bg-[var(--background)] border-r border-[var(--border-subtle)] h-full shrink-0">
+    <aside className="w-full md:w-[280px] lg:w-[310px] flex flex-col bg-[var(--background)] border-r border-[var(--border-subtle)] h-full shrink-0">
       {/* Controls */}
-      <div className="p-3 space-y-2 border-b border-[var(--border-subtle)]">
+      <div className="p-3 space-y-2.5 border-b border-[var(--border-subtle)]">
         <div className="relative">
           <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--dim)]" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search..."
-            className="w-full pl-8 pr-3 py-[6px] text-[12px] bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--dim)] focus:outline-none focus:border-[var(--accent)]/40 transition-colors"
+            placeholder="Filter runs (e.g. llama, 1M)..."
+            className="w-full pl-8 pr-3 py-1.5 text-[12px] bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--foreground)] placeholder-[var(--dim)] focus:outline-none focus:border-[var(--accent)] transition-colors font-mono"
           />
         </div>
 
         <div className="flex items-center justify-between">
-          <div className="flex gap-0.5 text-[11px]">
+          <div className="flex gap-1 text-[11px] font-mono">
             {(['all', 'healthy', 'issues'] as const).map((f) => (
               <button
                 key={f}
                 type="button"
                 onClick={() => setFilter(f)}
-                className={`px-2 py-[3px] rounded-md font-medium capitalize transition-colors cursor-pointer ${
+                className={`px-2 py-0.5 rounded-md font-medium capitalize transition-colors cursor-pointer ${
                   filter === f
-                    ? 'bg-[var(--surface-raised)] text-[var(--foreground)]'
+                    ? 'bg-[#222222] text-[var(--foreground)] border border-[var(--border)]'
                     : 'text-[var(--dim)] hover:text-[var(--muted)]'
                 }`}
               >
-                {f}
+                {f} ({counts[f]})
               </button>
             ))}
           </div>
           <button
             type="button"
             onClick={() => setSortDesc(!sortDesc)}
-            className="text-[var(--dim)] hover:text-[var(--muted)] transition-colors cursor-pointer p-0.5"
-            title="Toggle sort"
+            className="flex items-center gap-1 text-[11px] font-mono text-[var(--dim)] hover:text-[var(--muted)] transition-colors cursor-pointer px-1.5 py-0.5 rounded hover:bg-[#161616]"
+            title="Toggle sort direction"
           >
-            {sortDesc ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
+            <ArrowUpDown className="w-3 h-3" />
+            <span>{sortDesc ? 'Steps ↓' : 'Steps ↑'}</span>
           </button>
         </div>
       </div>
 
-      {/* List */}
+      {/* Run List Scroll Container */}
       <div className="flex-1 overflow-y-auto" role="listbox">
         {filtered.length === 0 ? (
-          <div className="py-12 text-center text-[12px] text-[var(--dim)]">No runs found.</div>
+          <div className="py-12 text-center text-[12px] font-mono text-[var(--dim)]">No runs matched.</div>
         ) : (
           filtered.map((run) => {
-            const sel = run.id === selectedRunId;
-            const s = statusLabel[run.status];
-            const isStress = run.id === 'run-20';
+            const isSelected = run.id === selectedRunId;
+            const badge = statusBadge[run.status];
+            const is1MSpike = run.id === 'run-20';
 
             return (
               <button
                 key={run.id}
                 type="button"
                 onClick={() => onSelectRun(run.id)}
-                className={`w-full text-left px-3 py-2.5 border-b border-[var(--border-subtle)] transition-colors cursor-pointer group ${
-                  sel ? 'bg-[var(--surface)]' : 'hover:bg-[var(--surface)]/50'
+                className={`w-full text-left px-3.5 py-2.5 border-b border-[var(--border-subtle)] transition-all cursor-pointer group flex flex-col gap-1 ${
+                  isSelected
+                    ? 'bg-[#141414] border-l-2 border-l-[var(--accent)]'
+                    : 'hover:bg-[#111111]/70'
                 }`}
                 role="option"
-                aria-selected={sel}
+                aria-selected={isSelected}
               >
-                {/* Name row */}
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className={`text-[12px] font-medium truncate ${sel ? 'text-[var(--foreground)]' : 'text-[var(--muted)] group-hover:text-[var(--foreground)]'} transition-colors`}>
+                {/* Title & Badge */}
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className={`text-[12px] font-medium truncate ${
+                      isSelected ? 'text-[var(--foreground)] font-semibold' : 'text-[var(--muted)] group-hover:text-[var(--foreground)]'
+                    } transition-colors`}
+                  >
                     {run.name}
                   </span>
-                  <span className={`text-[10px] font-medium ${isStress ? 'text-[var(--accent)]' : s.color} shrink-0`}>
-                    {isStress ? '1M' : s.text}
+                  <span
+                    className={`text-[10px] font-mono font-medium px-1.5 py-0.2 rounded-full shrink-0 ${
+                      is1MSpike
+                        ? 'border border-[var(--accent)]/40 bg-[var(--accent)]/15 text-[var(--accent-hover)] font-semibold'
+                        : badge.style
+                    }`}
+                  >
+                    {is1MSpike ? '1M Spike' : badge.text}
                   </span>
                 </div>
 
-                {/* Meta row */}
-                <div className="flex items-center justify-between text-[11px] font-[family-name:var(--font-mono)] text-[var(--dim)]">
+                {/* Sub info */}
+                <div className="flex items-center justify-between text-[11px] font-mono text-[var(--dim)]">
                   <span>
-                    {run.totalSteps >= 1e6 ? '1,000,000' : run.totalSteps.toLocaleString()} steps
+                    {run.totalSteps >= 1000000
+                      ? '1,000,000 steps'
+                      : run.totalSteps >= 1000
+                      ? `${(run.totalSteps / 1000).toFixed(0)}k steps`
+                      : `${run.totalSteps} steps`}
                   </span>
                   <span>
-                    {run.finalLoss !== null ? run.finalLoss.toFixed(3) : 'NaN'}
+                    loss:{' '}
+                    <strong className={run.finalLoss === null ? 'text-[var(--rose)]' : 'text-[var(--muted)]'}>
+                      {run.finalLoss !== null ? run.finalLoss.toFixed(3) : 'NaN'}
+                    </strong>
                   </span>
                 </div>
               </button>
