@@ -62,7 +62,7 @@ export default function App() {
   }, [selectedRunId, runs, loadRun]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--bg-void)] text-[var(--text-primary)] antialiased">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-[var(--background)] text-[var(--foreground)] antialiased font-[family-name:var(--font-sans)]">
       <Header />
 
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">

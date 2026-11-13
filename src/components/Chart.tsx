@@ -9,8 +9,6 @@ interface ChartProps {
   values: (number | null)[];
   seriesName: string;
   color?: string;
-  gradientFrom?: string;
-  gradientTo?: string;
   isLogScaleAllowed?: boolean;
   unit?: string;
   showDownsampleToggle?: boolean;
@@ -21,9 +19,7 @@ export const Chart: React.FC<ChartProps> = ({
   steps,
   values,
   seriesName,
-  color = '#3b82f6',
-  gradientFrom,
-  gradientTo,
+  color = '#c0512d', // Default to Soup Terracotta
   isLogScaleAllowed = false,
   unit = '',
   showDownsampleToggle = false,
@@ -54,9 +50,16 @@ export const Chart: React.FC<ChartProps> = ({
     let np = 0;
     const tv: (number | null)[] = [];
     for (const v of dv) {
-      if (v === null) { tv.push(null); continue; }
-      if (isLogScale && v <= 0) { np++; tv.push(1e-6); }
-      else { tv.push(v); }
+      if (v === null) {
+        tv.push(null);
+        continue;
+      }
+      if (isLogScale && v <= 0) {
+        np++;
+        tv.push(1e-6);
+      } else {
+        tv.push(v);
+      }
     }
     setClampedCount(np);
     return [ds, tv] as [number[], (number | null)[]];
@@ -64,20 +67,23 @@ export const Chart: React.FC<ChartProps> = ({
 
   useEffect(() => {
     if (!chartRef.current) return;
-    if (uplotRef.current) { uplotRef.current.destroy(); uplotRef.current = null; }
+    if (uplotRef.current) {
+      uplotRef.current.destroy();
+      uplotRef.current = null;
+    }
 
     const width = chartRef.current.clientWidth || 600;
-    const height = 240;
+    const height = 230;
     const lineColor = color;
 
     const opts: uPlot.Options = {
       width,
       height,
-      padding: [12, 12, 0, 0],
+      padding: [10, 14, 0, 0],
       cursor: {
         drag: { x: true, y: true },
         sync: { key: 'soup-sync' },
-        points: { size: 8, fill: lineColor, stroke: '#fff', width: 2 },
+        points: { size: 6, fill: lineColor, stroke: '#ffffff', width: 1.5 },
       },
       scales: {
         x: { time: false },
@@ -85,19 +91,21 @@ export const Chart: React.FC<ChartProps> = ({
       },
       axes: [
         {
-          stroke: 'rgba(107, 123, 165, 0.4)',
-          grid: { stroke: 'rgba(107, 123, 165, 0.06)', width: 1 },
-          ticks: { stroke: 'rgba(107, 123, 165, 0.15)', width: 1, size: 4 },
-          font: '10px Inter, system-ui, sans-serif',
+          stroke: '#666666',
+          grid: { stroke: 'rgba(255, 255, 255, 0.04)', width: 1 },
+          ticks: { stroke: '#333333', width: 1, size: 4 },
+          font: '10px "Geist Mono", monospace',
           values: (_u, vals) =>
-            vals.map((v) => (v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`)),
+            vals.map((v) =>
+              v >= 1000000 ? `${(v / 1000000).toFixed(1)}M` : v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`
+            ),
         },
         {
-          stroke: 'rgba(107, 123, 165, 0.4)',
-          grid: { stroke: 'rgba(107, 123, 165, 0.06)', width: 1 },
-          ticks: { stroke: 'rgba(107, 123, 165, 0.15)', width: 1, size: 4 },
-          font: '10px Inter, system-ui, sans-serif',
-          size: 52,
+          stroke: '#666666',
+          grid: { stroke: 'rgba(255, 255, 255, 0.04)', width: 1 },
+          ticks: { stroke: '#333333', width: 1, size: 4 },
+          font: '10px "Geist Mono", monospace',
+          size: 56,
           values: (_u, vals) =>
             vals.map((v) => {
               if (v == null) return '';
@@ -120,16 +128,14 @@ export const Chart: React.FC<ChartProps> = ({
           points: { show: preparedData[0].length < 80, size: 3 },
           fill: (u: uPlot) => {
             const ctx = u.ctx;
-            const from = gradientFrom || lineColor;
-            const to = gradientTo || 'transparent';
             const top = u.bbox?.top;
-            const height = u.bbox?.height;
-            if (!Number.isFinite(top) || !Number.isFinite(height) || !height || height <= 0) {
-              return from + '18';
+            const h = u.bbox?.height;
+            if (!Number.isFinite(top) || !Number.isFinite(h) || !h || h <= 0) {
+              return 'transparent';
             }
-            const grd = ctx.createLinearGradient(0, top, 0, top + height);
-            grd.addColorStop(0, from + '18');
-            grd.addColorStop(1, to === 'transparent' ? 'transparent' : to + '00');
+            const grd = ctx.createLinearGradient(0, top, 0, top + h);
+            grd.addColorStop(0, `${lineColor}15`);
+            grd.addColorStop(1, 'transparent');
             return grd;
           },
           value: (_u, v) => (v == null ? 'NaN / Missing' : `${v.toFixed(4)} ${unit}`),
@@ -142,67 +148,80 @@ export const Chart: React.FC<ChartProps> = ({
 
     const ro = new ResizeObserver(() => {
       if (chartRef.current && uplotRef.current) {
-        uplotRef.current.setSize({ width: chartRef.current.clientWidth, height: 240 });
+        uplotRef.current.setSize({ width: chartRef.current.clientWidth, height: 230 });
       }
     });
     ro.observe(chartRef.current);
 
     return () => {
       ro.disconnect();
-      if (uplotRef.current) { uplotRef.current.destroy(); uplotRef.current = null; }
+      if (uplotRef.current) {
+        uplotRef.current.destroy();
+        uplotRef.current = null;
+      }
     };
-  }, [preparedData, color, isLogScale, seriesName, unit, gradientFrom, gradientTo]);
+  }, [preparedData, color, isLogScale, seriesName, unit]);
 
   return (
-    <div className="glass-card p-0 overflow-hidden animate-fade-in">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-[var(--border-subtle)]">
+    <div className="rounded-xl border border-[var(--border)] bg-[#0c0c0c] overflow-hidden text-left shadow-[0_0_40px_rgba(0,0,0,0.6)]">
+      {/* Title bar with terminal dots */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 border-b border-[var(--border-subtle)] bg-[#111111]/80">
         <div className="flex items-center gap-2.5">
-          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color, boxShadow: `0 0 8px ${color}60` }} />
-          <h4 className="text-[12px] font-semibold text-[var(--text-primary)] tracking-tight">{title}</h4>
-          <span className="text-[10px] text-[var(--text-dim)] font-mono bg-[var(--bg-surface)] px-1.5 py-0.5 rounded-md">
-            {preparedData[0].length.toLocaleString()} pts
+          {/* Traffic light window controls */}
+          <div className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]/80" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]/80" />
+            <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]/80" />
+          </div>
+
+          <div className="h-3 w-px bg-[var(--border)] mx-1" />
+
+          <span className="text-[12px] font-mono font-medium text-[var(--foreground)]">{title}</span>
+          <span className="text-[10px] text-[var(--dim)] font-mono">
+            [{preparedData[0].length.toLocaleString()} pts]
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 text-[10px]">
-          {/* Truthful vs Naive Toggle */}
+        <div className="flex items-center gap-1.5 text-[11px] font-mono">
+          {/* Downsample Toggle */}
           {showDownsampleToggle && steps.length > 3000 && (
-            <div className="flex items-center bg-[var(--bg-surface)] border border-[var(--border-subtle)] rounded-lg p-0.5">
+            <div className="flex items-center bg-[#161616] border border-[var(--border)] rounded-md p-0.5">
               <button
                 type="button"
                 onClick={() => setDownsampleMode('minmax')}
-                className={`px-2 py-[3px] rounded-md font-semibold transition-all duration-200 flex items-center gap-1 cursor-pointer ${
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-1 ${
                   downsampleMode === 'minmax'
-                    ? 'bg-emerald-500/20 text-emerald-400 shadow-sm'
-                    : 'text-[var(--text-dim)] hover:text-[var(--text-muted)]'
+                    ? 'bg-[#222222] text-[#00d294] font-semibold'
+                    : 'text-[var(--dim)] hover:text-[var(--muted)]'
                 }`}
+                title="Min-Max Extrema: Preserves outlier spikes"
               >
-                <Eye className="w-3 h-3" /> Truthful
+                <Eye className="w-3 h-3" /> Min-Max
               </button>
               <button
                 type="button"
                 onClick={() => setDownsampleMode('stride')}
-                className={`px-2 py-[3px] rounded-md font-semibold transition-all duration-200 flex items-center gap-1 cursor-pointer ${
+                className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-1 ${
                   downsampleMode === 'stride'
-                    ? 'bg-rose-500/20 text-rose-400 shadow-sm'
-                    : 'text-[var(--text-dim)] hover:text-[var(--text-muted)]'
+                    ? 'bg-[#222222] text-[var(--rose)] font-semibold'
+                    : 'text-[var(--dim)] hover:text-[var(--muted)]'
                 }`}
+                title="Naive Stride: Skips points (hides spikes)"
               >
                 <ShieldAlert className="w-3 h-3" /> Naive
               </button>
             </div>
           )}
 
-          {/* Log Scale */}
+          {/* Log Scale Toggle */}
           {isLogScaleAllowed && (
             <button
               type="button"
               onClick={() => setIsLogScale(!isLogScale)}
-              className={`px-2 py-[3px] rounded-md font-semibold border transition-all duration-200 cursor-pointer ${
+              className={`px-2 py-0.5 rounded-md border text-[11px] font-medium transition-colors cursor-pointer ${
                 isLogScale
-                  ? 'bg-cyan-500/15 border-cyan-500/25 text-cyan-400'
-                  : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-dim)] hover:text-[var(--text-muted)]'
+                  ? 'bg-[#222222] border-[var(--accent)] text-[var(--accent-hover)]'
+                  : 'bg-[#161616] border-[var(--border)] text-[var(--dim)] hover:text-[var(--muted)]'
               }`}
             >
               {isLogScale ? 'Log' : 'Linear'}
@@ -213,31 +232,35 @@ export const Chart: React.FC<ChartProps> = ({
           <button
             type="button"
             onClick={() => uplotRef.current?.setData(preparedData as uPlot.AlignedData, true)}
-            className="p-[4px] rounded-md bg-[var(--bg-surface)] border border-[var(--border-subtle)] text-[var(--text-dim)] hover:text-[var(--text-muted)] transition-colors cursor-pointer"
-            title="Reset zoom"
+            className="p-1 rounded-md bg-[#161616] border border-[var(--border)] text-[var(--dim)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
+            title="Reset Zoom (R)"
           >
             <RotateCcw className="w-3 h-3" />
           </button>
         </div>
       </div>
 
-      {/* Warning Banners */}
+      {/* Warnings */}
       {isLogScale && clampedCount > 0 && (
-        <div className="mx-4 mt-2 px-3 py-1.5 rounded-lg bg-amber-500/8 border border-amber-500/15 text-amber-400 text-[11px] flex items-center gap-2">
+        <div className="mx-3 mt-2 px-2.5 py-1.5 rounded-md bg-[#f5a623]/8 border border-[#f5a623]/25 text-[#f5a623] text-[11px] font-mono flex items-center gap-2">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-          <span><strong>Log Scale Guard:</strong> {clampedCount} non-positive value{clampedCount > 1 && 's'} clamped to 1e-6 (log(0) = -∞).</span>
+          <span>
+            <strong>Warning:</strong> {clampedCount} non-positive value(s) clamped to 1e-6 (log(0) is -Infinity).
+          </span>
         </div>
       )}
 
       {downsampleMode === 'stride' && steps.length > 50000 && (
-        <div className="mx-4 mt-2 px-3 py-1.5 rounded-lg bg-rose-500/8 border border-rose-500/15 text-rose-400 text-[11px] flex items-center gap-2">
+        <div className="mx-3 mt-2 px-2.5 py-1.5 rounded-md bg-[var(--rose)]/10 border border-[var(--rose)]/30 text-[var(--rose)] text-[11px] font-mono flex items-center gap-2">
           <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
-          <span><strong>Naive Stride active!</strong> The 942.5 spike at step 524,288 has vanished. Switch to <strong>Truthful</strong> to see it.</span>
+          <span>
+            <strong>Silent Failure active:</strong> Naive Stride filtered out the 942.5 spike at step 524,288. Switch to <strong>Min-Max</strong> to see reality.
+          </span>
         </div>
       )}
 
       {/* Chart Canvas */}
-      <div ref={chartRef} className="w-full px-2 pb-2 pt-1 cursor-crosshair" />
+      <div ref={chartRef} className="w-full px-2 py-1 cursor-crosshair" />
     </div>
   );
 };
